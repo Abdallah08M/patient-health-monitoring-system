@@ -8,6 +8,7 @@
 #define DHT_TYPE DHT22
 #define HEART_RATE_PIN 34
 #define SPO2_PIN 35
+#define BUZZER_PIN 25
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -28,11 +29,16 @@ void setup() {
 
     dht.begin();
 
+    // Buzzer
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);
+
     // I2C: SDA = GPIO 21, SCL = GPIO 22
     Wire.begin(21, 22);
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println("OLED initialization failed");
+
         while (true) {
             delay(100);
         }
@@ -55,6 +61,7 @@ void setup() {
     Serial.println("Heart rate simulation initialized");
     Serial.println("SpO2 simulation initialized");
     Serial.println("OLED display initialized");
+    Serial.println("Buzzer alarm initialized");
 
     delay(2000);
 }
@@ -89,6 +96,13 @@ void loop() {
         spo2Status = "BORDERLINE SpO2";
     } else {
         spo2Status = "NORMAL SpO2";
+    }
+
+    // Alarm condition
+    if (heartRate < 60 || heartRate > 100 || spo2 < 90) {
+        tone(BUZZER_PIN, 1000);
+    } else {
+        noTone(BUZZER_PIN);
     }
 
     if (isnan(temperature) || isnan(humidity)) {
