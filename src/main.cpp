@@ -98,14 +98,22 @@ void loop() {
         spo2Status = "NORMAL SpO2";
     }
 
-    // Overall patient status
+    // Determine warning
     bool warning = false;
+    String warningReason = "";
 
-    if (heartRate < 60 || heartRate > 100 || spo2 < 90) {
+    if (heartRate < 60) {
         warning = true;
+        warningReason = "LOW HR";
+    } else if (heartRate > 100) {
+        warning = true;
+        warningReason = "HIGH HR";
+    } else if (spo2 < 90) {
+        warning = true;
+        warningReason = "LOW SpO2";
     }
 
-    // Alarm condition
+    // Buzzer alarm
     if (warning) {
         tone(BUZZER_PIN, 1000);
     } else {
@@ -131,7 +139,8 @@ void loop() {
         Serial.print(spo2Status);
 
         if (warning) {
-            Serial.println(" | PATIENT WARNING");
+            Serial.print(" | WARNING: ");
+            Serial.println(warningReason);
         } else {
             Serial.println(" | PATIENT NORMAL");
         }
@@ -141,30 +150,36 @@ void loop() {
 
         display.setTextSize(1);
 
+        // Title
         display.setCursor(0, 0);
         display.println("PATIENT MONITOR");
 
         display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
+        // Temperature
         display.setCursor(0, 14);
         display.print("Temp: ");
         display.print(temperature, 1);
         display.println(" C");
 
+        // Heart rate
         display.setCursor(0, 26);
         display.print("Heart: ");
         display.print(heartRate);
         display.println(" BPM");
 
+        // SpO2
         display.setCursor(0, 38);
         display.print("SpO2: ");
         display.print(spo2);
         display.println(" %");
 
+        // Overall status
         display.setCursor(0, 50);
 
         if (warning) {
-            display.println("!! WARNING !!");
+            display.print("WARNING: ");
+            display.println(warningReason);
         } else {
             display.println("STATUS: NORMAL");
         }
