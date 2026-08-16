@@ -98,8 +98,15 @@ void loop() {
         spo2Status = "NORMAL SpO2";
     }
 
-    // Alarm condition
+    // Overall patient status
+    bool warning = false;
+
     if (heartRate < 60 || heartRate > 100 || spo2 < 90) {
+        warning = true;
+    }
+
+    // Alarm condition
+    if (warning) {
         tone(BUZZER_PIN, 1000);
     } else {
         noTone(BUZZER_PIN);
@@ -108,6 +115,7 @@ void loop() {
     if (isnan(temperature) || isnan(humidity)) {
         Serial.println("Failed to read from DHT22");
     } else {
+
         // Serial Monitor
         Serial.print("Temperature: ");
         Serial.print(temperature);
@@ -120,36 +128,46 @@ void loop() {
         Serial.print(" | SpO2: ");
         Serial.print(spo2);
         Serial.print(" % | Status: ");
-        Serial.println(spo2Status);
+        Serial.print(spo2Status);
+
+        if (warning) {
+            Serial.println(" | PATIENT WARNING");
+        } else {
+            Serial.println(" | PATIENT NORMAL");
+        }
 
         // OLED
         display.clearDisplay();
 
         display.setTextSize(1);
+
         display.setCursor(0, 0);
         display.println("PATIENT MONITOR");
 
         display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
-        display.setCursor(0, 15);
+        display.setCursor(0, 14);
         display.print("Temp: ");
         display.print(temperature, 1);
         display.println(" C");
 
-        display.setCursor(0, 28);
-        display.print("Humidity: ");
-        display.print(humidity, 1);
-        display.println(" %");
-
-        display.setCursor(0, 41);
+        display.setCursor(0, 26);
         display.print("Heart: ");
         display.print(heartRate);
         display.println(" BPM");
 
-        display.setCursor(0, 54);
+        display.setCursor(0, 38);
         display.print("SpO2: ");
         display.print(spo2);
         display.println(" %");
+
+        display.setCursor(0, 50);
+
+        if (warning) {
+            display.println("!! WARNING !!");
+        } else {
+            display.println("STATUS: NORMAL");
+        }
 
         display.display();
     }
