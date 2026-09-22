@@ -3,6 +3,9 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 #define DHT_PIN 4
 #define DHT_TYPE DHT22
@@ -15,6 +18,20 @@
 #define OLED_RESET -1
 #define OLED_ADDRESS 0x3C
 
+// ===============================
+// Wi-Fi settings for Wokwi
+// ===============================
+const char* WIFI_SSID = "Wokwi-GUEST";
+const char* WIFI_PASSWORD = "";
+
+// ===============================
+// ThingSpeak
+// ===============================
+const char* THINGSPEAK_API_KEY = "YOUR_WRITE_API_KEY";
+
+const unsigned long THINGSPEAK_INTERVAL = 20000;
+unsigned long lastThingSpeakUpdate = 0;
+
 DHT dht(DHT_PIN, DHT_TYPE);
 
 Adafruit_SSD1306 display(
@@ -23,6 +40,83 @@ Adafruit_SSD1306 display(
     &Wire,
     OLED_RESET
 );
+
+// ===============================
+// Connect to Wi-Fi
+// ===============================
+void connectWiFi() {
+    Serial.println("Connecting to Wokwi Wi-Fi...");
+
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    int attempts = 0;
+
+    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("Wi-Fi connected");
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+    } else {
+        Serial.println("Wi-Fi connection failed");
+    }
+}
+
+// ===============================
+// Send data to ThingSpeak
+// ===============================
+void sendToThingSpeak(
+    float temperature,
+    float humidity,
+    int heartRate,
+    int spo2,
+    bool warning
+) {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Wi-Fi not connected");
+        return;
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();   // Wokwi TLS
+
+    HTTPClient http;
+
+    String url = "https://api.thingspeak.com/update?api_key=";
+    url += THINGSPEAK_API_KEY;
+    url += "&field1=" + String(temperature, 1);
+    url += "&field2=" + String(humidity, 1);
+    url += "&field3=" + String(heartRate);
+    url += "&field4=" + String(spo2);
+    url += "&field5=" + String(warning ? 0 : 1);
+
+    Serial.println("Sending data to ThingSpeak...");
+
+    http.begin(client, url);
+
+    int httpCode = http.GET();
+
+    Serial.print("HTTP Code: ");
+    Serial.println(httpCode);
+
+    if (httpCode == 200) {
+        String payload = http.getString();
+
+        Serial.print("ThingSpeak Entry ID: ");
+        Serial.println(payload);
+    } else {
+        Serial.print("HTTP Error: ");
+        Serial.println(httpCode);
+    }
+
+    http.end();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -36,6 +130,7 @@ void setup() {
     // I2C: SDA = GPIO 21, SCL = GPIO 22
     Wire.begin(21, 22);
 
+    // OLED
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println("OLED initialization failed");
 
@@ -52,7 +147,7 @@ void setup() {
     display.println("PATIENT MONITOR");
 
     display.setCursor(20, 20);
-    display.println("System Ready");
+    display.println("Connecting WiFi...");
 
     display.display();
 
@@ -63,6 +158,27 @@ void setup() {
     Serial.println("OLED display initialized");
     Serial.println("Buzzer alarm initialized");
 
+    // Connect to Wi-Fi
+    connectWiFi();
+
+    display.clearDisplay();
+
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("PATIENT MONITOR");
+
+    display.setCursor(0, 20);
+
+    if (WiFi.status() == WL_CONNECTED) {
+        display.println("WiFi Connected");
+        display.setCursor(0, 35);
+        display.println("Cloud Ready");
+    } else {
+        display.println("WiFi Failed");
+    }
+
+    display.display();
+
     delay(2000);
 }
 
@@ -70,7 +186,9 @@ void loop() {
     float temperature = dht.readTemperature();
     float humidity = dht.readHumidity();
 
+    // ===============================
     // Heart-rate simulation
+    // ===============================
     int sensorValue = analogRead(HEART_RATE_PIN);
     int heartRate = map(sensorValue, 0, 4095, 50, 130);
 
@@ -84,7 +202,9 @@ void loop() {
         heartRateStatus = "HIGH HEART RATE";
     }
 
+    // ===============================
     // SpO2 simulation
+    // ===============================
     int spo2SensorValue = analogRead(SPO2_PIN);
     int spo2 = map(spo2SensorValue, 0, 4095, 85, 100);
 
@@ -98,7 +218,9 @@ void loop() {
         spo2Status = "NORMAL SpO2";
     }
 
+    // ===============================
     // Determine warning
+    // ===============================
     bool warning = false;
     String warningReason = "";
 
@@ -113,7 +235,9 @@ void loop() {
         warningReason = "LOW SpO2";
     }
 
+    // ===============================
     // Buzzer alarm
+    // ===============================
     if (warning) {
         tone(BUZZER_PIN, 1000);
     } else {
@@ -124,7 +248,9 @@ void loop() {
         Serial.println("Failed to read from DHT22");
     } else {
 
+        // ===============================
         // Serial Monitor
+        // ===============================
         Serial.print("Temperature: ");
         Serial.print(temperature);
         Serial.print(" °C | Humidity: ");
@@ -145,12 +271,13 @@ void loop() {
             Serial.println(" | PATIENT NORMAL");
         }
 
+        // ===============================
         // OLED
+        // ===============================
         display.clearDisplay();
 
         display.setTextSize(1);
 
-        // Title
         display.setCursor(0, 0);
         display.println("PATIENT MONITOR");
 
@@ -185,6 +312,22 @@ void loop() {
         }
 
         display.display();
+
+        // ===============================
+        // ThingSpeak upload
+        // ===============================
+        if (millis() - lastThingSpeakUpdate >= THINGSPEAK_INTERVAL) {
+
+            sendToThingSpeak(
+                temperature,
+                humidity,
+                heartRate,
+                spo2,
+                warning
+            );
+
+            lastThingSpeakUpdate = millis();
+        }
     }
 
     delay(2000);
